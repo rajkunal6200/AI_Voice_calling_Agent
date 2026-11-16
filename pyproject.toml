@@ -1,0 +1,65 @@
+[project]
+name = "ai-voice-agents-crm-erp"
+version = "0.1.0"
+description = "Voice AI agents that automate CRM and ERP business processes over the phone."
+requires-python = ">=3.11"
+dependencies = [
+    # Voice agent runtime. The `inference` extra pulls in LiveKit's hosted
+    # STT/LLM/TTS gateway so we don't need a plugin package per vendor.
+    "livekit-agents[inference]>=1.0",
+    # Dashboard API + webhook receiver.
+    "fastapi",
+    "uvicorn[standard]",
+    # One HTTP client for every outbound call (HubSpot, LiveKit REST).
+    "httpx",
+    "pydantic>=2",
+    "pydantic-settings",
+    # Postgres: agent-run history for the dashboard, plus the ERP tables.
+    "asyncpg",
+    "sqlalchemy[asyncio]",
+    # Observability.
+    "structlog",
+    "sentry-sdk[fastapi]",
+    "python-dotenv",
+    "pgvector>=0.5.0",
+    "fastembed>=0.8.0",
+    "phonenumbers>=9.0.36",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=1.0",
+    "respx",          # mocks httpx at the transport layer — see tests/conftest.py
+    "ruff",
+    "mypy",
+]
+
+[tool.pytest.ini_options]
+# Async tests need no per-test decorator.
+asyncio_mode = "auto"
+# The SQLAlchemy engine is created at import time and its pooled connections
+# bind to the loop that first used them; a fresh loop per test hands the next
+# test a dead connection ("another operation is in progress"). Pin both scopes.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+# tests/ sits beside app/ and agent/ rather than inside an installed package.
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.mypy]
+# No explicit python_version: mypy then targets the interpreter in .venv.
+# Pinning it to 3.11 while the venv runs 3.13 makes third-party stubs that use
+# 3.12+ syntax fail to parse, which halts checking entirely.
+strict = true
+# LiveKit and its plugins ship partial stubs.
+[[tool.mypy.overrides]]
+module = ["livekit.*"]
+ignore_missing_imports = true

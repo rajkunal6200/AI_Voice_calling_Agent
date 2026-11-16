@@ -1,0 +1,548 @@
+/* Call Ledger — operations view for the voice agents.
+ *
+ * Direction: a telephony logbook rather than a SaaS dashboard. Figures sit in
+ * a ruled strip instead of rounded cards, and the call timeline is the one
+ * place the design spends any boldness: two speaking voices set against a
+ * monospaced machine substrate, with latency drawn as a bar so slow tools are
+ * visible at a glance rather than needing to be read.
+ */
+
+:root {
+  --paper: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #12161c;
+  --ink-soft: #5a6472;
+  --ink-faint: #8b94a3;
+  --rule: #e1e5eb;
+  --rule-strong: #c9d0d9;
+
+  /* Signal colours carry meaning; nothing here is decorative. */
+  --human: #2b5ce6;
+  --agent: #0e7c66;
+  --machine: #6b4fbb;
+  --warn: #b26a00;
+  --fail: #b3261e;
+
+  --display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- shell ------------------------------------------------------------- */
+
+.shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+}
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 0 14px;
+  border-bottom: 2px solid var(--ink);
+  flex-wrap: wrap;
+}
+
+.masthead h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.masthead .sub {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+/* --- figures strip ------------------------------------------------------ */
+/* A ruled row, not a set of cards. Hairlines do the separating work. */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  border-bottom: 1px solid var(--rule);
+}
+
+.figure {
+  padding: 18px 20px 16px;
+  border-right: 1px solid var(--rule);
+}
+
+.figure:last-child {
+  border-right: none;
+}
+
+.figure .value {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.figure .label {
+  margin-top: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.figure.is-alert .value {
+  color: var(--fail);
+}
+
+.figure.is-live .value {
+  color: var(--agent);
+}
+
+/* --- two-pane layout ---------------------------------------------------- */
+
+.panes {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+  gap: 28px;
+  margin-top: 28px;
+  align-items: start;
+}
+
+.pane-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-soft);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule-strong);
+  margin-bottom: 0;
+}
+
+/* --- call list ---------------------------------------------------------- */
+
+.call-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.call-row {
+  width: 100%;
+  display: block;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  padding: 12px 10px 12px 14px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  position: relative;
+  transition: background 120ms ease;
+}
+
+.call-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+}
+
+.call-row:hover {
+  background: #eef1f5;
+}
+
+.call-row[aria-current="true"] {
+  background: var(--panel);
+}
+
+.call-row[aria-current="true"]::before {
+  background: var(--ink);
+}
+
+.call-row:focus-visible {
+  outline: 2px solid var(--human);
+  outline-offset: -2px;
+}
+
+.call-row .line-1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.call-row .who {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.call-row .when {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.call-row .line-2 {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* --- status + direction tags -------------------------------------------- */
+
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.tag.completed {
+  color: var(--agent);
+}
+.tag.failed {
+  color: var(--fail);
+}
+.tag.in_progress {
+  color: var(--warn);
+}
+.tag.dir {
+  color: var(--ink-faint);
+}
+
+/* --- detail pane -------------------------------------------------------- */
+
+.detail {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+}
+
+.detail-head {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.detail-head h2 {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0 0 10px;
+  word-break: break-all;
+}
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.detail-summary {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--rule);
+  background: #fbfcfd;
+  font-size: 14px;
+}
+
+.detail-summary .eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-faint);
+  display: block;
+  margin-bottom: 5px;
+}
+
+/* --- the timeline: the signature element -------------------------------- */
+
+.timeline {
+  padding: 20px 24px 28px;
+  position: relative;
+}
+
+/* The rail the whole conversation hangs off. */
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 96px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rule);
+}
+
+.turn {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 24px;
+  padding: 9px 0;
+  position: relative;
+}
+
+.turn .gutter {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: right;
+  padding-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Node on the rail. */
+.turn .body::before {
+  content: "";
+  position: absolute;
+  left: 93px;
+  top: 15px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rule-strong);
+}
+
+.turn.speech .body {
+  padding-left: 4px;
+}
+
+.turn.user .body::before {
+  background: var(--human);
+}
+
+.turn.agent .body::before {
+  background: var(--agent);
+}
+
+.turn .speaker {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 3px;
+}
+
+.turn.user .speaker {
+  color: var(--human);
+}
+
+.turn.agent .speaker {
+  color: var(--agent);
+}
+
+.turn .said {
+  font-size: 15px;
+  max-width: 62ch;
+}
+
+/* Machine rows read differently from speech — mono, quieter, tabular. */
+.turn.machine .body {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-left: 4px;
+}
+
+.turn.machine .body::before {
+  background: var(--machine);
+  width: 5px;
+  height: 5px;
+  left: 94px;
+  top: 17px;
+}
+
+.turn.machine .tool-name {
+  color: var(--machine);
+  font-weight: 500;
+}
+
+.turn.machine.is-error .body::before {
+  background: var(--fail);
+}
+
+.turn.machine.is-error .tool-name {
+  color: var(--fail);
+}
+
+.turn .args {
+  color: var(--ink-faint);
+  word-break: break-word;
+}
+
+/* Latency as a bar: reading "402ms" is slower than seeing it. */
+.latency {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.latency .bar {
+  display: block;
+  height: 3px;
+  background: var(--machine);
+  border-radius: 2px;
+  min-width: 2px;
+}
+
+.latency.slow .bar {
+  background: var(--warn);
+}
+
+.latency.slow {
+  color: var(--warn);
+}
+
+/* --- states ------------------------------------------------------------- */
+
+.state {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.state.error {
+  color: var(--fail);
+}
+
+.state code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: #eef1f5;
+  padding: 2px 5px;
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+/* --- error feed --------------------------------------------------------- */
+
+.errors {
+  margin-top: 34px;
+}
+
+.error-row {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+
+.error-row .type {
+  color: var(--fail);
+  font-weight: 500;
+}
+
+.error-row .reason {
+  color: var(--ink-soft);
+  flex: 1;
+  min-width: 200px;
+}
+
+.error-row .call-link {
+  color: var(--ink-faint);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.error-row .call-link:hover {
+  color: var(--ink);
+}
+
+/* --- responsive --------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .panes {
+    grid-template-columns: 1fr;
+  }
+  .timeline::before,
+  .turn .body::before {
+    display: none;
+  }
+  .turn {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .turn .gutter {
+    text-align: left;
+  }
+  .latency {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+/* A business result, not a status. Distinct from the status tags so a call
+   that sold something is scannable in a list where everything says
+   "completed". */
+.tag.outcome {
+  color: var(--machine);
+  background: color-mix(in srgb, var(--machine) 8%, transparent);
+  /* The one filled tag on the row. Status tags say how the call ended; this
+     says what it was worth, and that should be the thing the eye lands on. */
+  font-weight: 500;
+}
